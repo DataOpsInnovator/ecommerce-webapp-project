@@ -40,6 +40,6 @@ This project is licensed under the MIT License. See the LICENSE file for details
 Contact
 For any inquiries or feedback, feel free to reach out to me through my LinkedIn.
 
-Thank you for visiting the ShopSmartlytoday.com repository!
+Thank you for visiting the ShopSmartlytoday.com ecommerce website!
 
 Feel free to adjust any sections to better match your style or add any additional information you think might be relevant!
