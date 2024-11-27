@@ -1,0 +1,422 @@
+
+1. Root Directory: 
+
+ 1.1. main.tf
+
+This file is the primary configuration file that sets up the AWS provider and calls the modular infrastructure components.
+
+# This main.tf file calls each module (VPC, security group, and EC2 instance).
+
+# Specify the AWS provider with a region:
+
+provider "aws" {
+  region = "us-east-1"  # Define the AWS region where resources will be created (e.g., `us-east-1`)
+}
+
+Explanation: The provider block tells Terraform to use AWS as the cloud provider and specifies the region. This region setting will apply to all resources unless overridden.
+
+
+a. VPC Module block
+
+# Call the VPC module to create the virtual private cloud, subnets, and internet gateway:
+
+module "vpc" {
+  source = "./modules/vpc"  # Specifies the path to the VPC module code
+}
+
+Explanation: This block calls the VPC module to create an isolated network environment that includes VPC, subnets, and an internet gateway, essential for managing network isolation and connectivity.
+
+
+b. Security Groups Module block
+
+# Call the Security Groups module to define inbound/outbound rules:
+
+module "security_groups" {
+  source = "./modules/security_groups"  # Specifies the path to the Security Groups module code
+  vpc_id = module.vpc.vpc_id            # Links the VPC ID from the VPC module output
+  ssh_ip = var.ssh_ip                   # Passes the SSH IP variable for restricted SSH access
+}
+
+Explanation: This block calls the Security Groups module, which creates rules controlling traffic to and from instances. 
+We reference the VPC ID from the VPC module and specify an IP for SSH access.
+
+
+c. EC2 Module block
+
+# Call the EC2 module to deploy an EC2 instance
+
+module "ec2" {
+  source           = "./modules/ec2"  # Path to EC2 module
+  vpc_id           = module.vpc.vpc_id  # Passes VPC ID
+  public_subnet_id = module.vpc.public_subnet_id  # Passes the public subnet ID from VPC module
+  security_group   = [module.security_groups.security_group_id]  # Passes the security group ID
+  key_name         = var.key_name
+}
+
+Explanation: This EC2 module configures and deploys an EC2 instance. The variables passed in (VPC ID, subnet, security group) ensure the instance has appropriate network access and security. 
+The SSH key enables remote management of the instance.
+
+ 1.2.variables.tf
+
+This file defines variables that can be customized based on the environment, making the configuration more flexible.
+
+# SSH key pair name for EC2 access
+
+variable "key_name" {
+  description = "The SSH key pair name for EC2 access"
+  type        = string
+  default     = "my-ssh-key"  # Default value; replace with the actual key pair
+}
+
+# IP range allowed to access EC2 instance via SSH
+
+variable "ssh_ip" {
+  description = "The CIDR block or IP address allowed to access via SSH"
+  type        = string
+  default     = "74.96.189.98/32"  # Replace with the desired IP address
+}
+
+Explanation: These variables enable flexible configuration by allowing different SSH keys and SSH access rules without modifying the core code.
+
+
+ 1.3. outputs.tf
+
+Outputs file that lets Terraform print essential values to the console after resource creation.
+
+
+# Output the public IP of the EC2 instance for quick reference:
+
+output "nginx_server_ip" {
+  value = module.ec2.nginx_public_ip  # The public IP address of the EC2 instance
+}
+
+# Output the VPC ID created:
+
+output "vpc_id" {
+  value = module.vpc.vpc_id  # ID of the VPC
+}
+
+# Output the security group ID created:
+
+output "security_group_id" {
+  value = module.security_groups.security_group_id  # ID of the security group
+}
+
+Explanation: These outputs display key values like the public IP of the EC2 instance, VPC ID, and security group ID after deployment, useful for confirming and referencing resources created.
+
+
+2. Module Codes (In Modules Subdirectory):
+
+Each module (vpc, security_groups, ec2) is structured separately in the modules folder for reusability and clarity.
+
+
+2.1.VPC_Module
+
+2.1.1.modules/vpc/main.tf
+
+# Create a VPC with a specific CIDR block:
+
+resource "aws_vpc" "my_vpc" {
+  cidr_block           = var.cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "my_vpc"
+  }
+}
+
+
+# Create a public subnet within the VPC:
+
+resource "aws_subnet" "public_subnet" {
+  vpc_id                  = aws_vpc.my_vpc.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true  # Automatically assigns public IPs to instances in this subnet
+  tags = {
+    Name = "public_subnet"
+  }
+}
+
+
+# Create a private subnet within the VPC:
+
+resource "aws_subnet" "private_subnet" {
+  vpc_id            = aws_vpc.my_vpc.id
+  cidr_block        = var.private_subnet_cidr
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "private_subnet"
+  }
+}
+
+
+# Create an Internet Gateway for outbound internet access:
+
+resource "aws_internet_gateway" "ig" {
+  vpc_id = aws_vpc.my_vpc.id
+  tags = {
+    Name = "my_ig"
+  }
+}
+
+
+# Route table for internet access on the public subnet:
+
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.my_vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"  # Route for all outbound traffic
+    gateway_id = aws_internet_gateway.ig.id
+  }
+  tags = {
+    Name = "public_rt"
+  }
+}
+
+
+# Associate the public route table with the public subnet:
+
+resource "aws_route_table_association" "public_rta" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+
+2.1.2. modules/vpc/variables.tf
+
+Defines inputs for VPC module, making CIDR blocks flexible.
+
+variable "cidr_block" {
+  description = "The CIDR block for the VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidr" {
+  description = "The CIDR block for the public subnet"
+  type        = string
+  default     = "10.0.1.0/24"
+}
+
+variable "private_subnet_cidr" {
+  description = "The CIDR block for the private subnet"
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
+
+2.1.3.modules/vpc/outputs.tf
+
+Outputs for easy referencing from root.
+
+output "vpc_id" {
+  value = aws_vpc.my_vpc.id
+}
+
+output "public_subnet_id" {
+  value = aws_subnet.public_subnet.id
+}
+
+output "private_subnet_id" {
+  value = aws_subnet.private_subnet.id
+}
+
+
+2.2.Security_groups Module:
+
+2.2.1. modules/security_groups/main.tf
+
+ -Security group allowing inbound HTTP and SSH and outbound all.
+
+resource "aws_security_group" "nginx_sg" {
+  vpc_id = var.vpc_id
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.ssh_ip]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "nginx_security_group"
+  }
+}
+
+
+2.2.2. modules/security_groups/variables.tf
+
+variable "vpc_id" {
+  description = "The VPC ID where the security group will be created"
+  type        = string
+}
+
+variable "ssh_ip" {
+  description = "The CIDR block or IP address allowed to access via SSH"
+  type        = string
+}
+
+modules/ec2/main.tf
+
+resource "aws_instance" "nginx_server" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = var.public_subnet_id
+  associate_public_ip_address = true
+  key_name                    = var.key_name
+  user_data                   = file("${path.module}/../../scripts/userdata.sh")
+  tags = {
+    Name = "nginx_server"
+  }
+  security_groups = var.security_group
+}
+
+
+2.2.3. modules/ec2/variables.tf
+
+variable "ami_id" {
+  description = "AMI ID for the EC2 instance"
+  type        = string
+}
+
+variable "instance_type" {
+  description = "Instance type"
+  type        = string
+}
+
+variable "key_name" {
+  description = "SSH key name"
+  type        = string
+}
+
+variable "public_subnet_id" {
+  description = "Subnet ID for EC2"
+  type        = string
+}
+
+
+2.3. EC2_Module:
+
+2.3.1. modules/ec2/outputs.tf
+
+Outputs specific to the EC2 instance, such as its public IP, so these can be easily referenced from the root module.
+
+# Output the public IP of the EC2 instance
+
+output "nginx_public_ip" {
+  value = aws_instance.nginx_server.public_ip
+  description = "The public IP address of the EC2 instance running NGINX"
+}
+
+
+Explanation: This output retrieves the EC2 instance’s public IP, making it easier to access the instance and verify its setup.
+
+
+3. Explanation for the userdata.sh Script
+
+The userdata.sh script is stored in the scripts directory and will be executed automatically on instance launch. This script typically installs and configures software on the EC2 instance.
+
+scripts/userdata.sh
+#!/bin/bash
+# Update package lists and install nginx web server
+sudo yum update -y
+sudo yum install -y nginx
+
+# Enable and start nginx service
+
+sudo systemctl enable nginx
+sudo systemctl start nginx
+
+Explanation:
+
+#!/bin/bash: Specifies that the script should be run in the Bash shell.
+
+sudo yum update -y: Updates package lists to ensure the latest software versions are available.
+sudo yum install -y nginx: Installs the NGINX web server.
+sudo systemctl enable nginx: Sets NGINX to start on boot.
+sudo systemctl start nginx: Immediately starts the NGINX server.
+
+This script ensures that NGINX is up and running as soon as the EC2 instance launches.
+
+
+# Full Directory Structure Recap:
+
+The final directory structure should resemble this:
+
+aws-website-terraform-infrastructure/          # Replace with your own directory (folder) name
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── modules/
+│   ├── vpc/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── security_groups/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── ec2/
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+└── scripts/
+    └── userdata.sh
+
+
+# Complete Code Flow Explanation
+
+main.tf in the root directory:
+
+Sets up the AWS provider to define the region for resource creation.
+Calls each module (vpc, security_groups, and ec2) with relevant variables.
+Each module creates specific AWS resources (VPC, Security Groups, and EC2 instance).
+
+modules/vpc:
+
+Purpose: Defines a virtual private cloud (VPC) for isolating network resources.
+Resources:
+aws_vpc: Creates a VPC with a specified CIDR block.
+aws_subnet: Creates public and private subnets for separating resources.
+aws_internet_gateway: Provides internet access to resources in the public subnet.
+aws_route_table and aws_route_table_association: Manages routing in the public subnet.
+Variables: Accepts CIDR blocks for VPC and subnets.
+Outputs: Exposes VPC ID, public subnet ID, and private subnet ID for use by other modules.
+
+
+modules/security_groups:
+
+Purpose: Defines security rules for controlling inbound and outbound traffic.
+Resources:
+aws_security_group: Configures rules allowing HTTP and restricted SSH access, while enabling all outbound traffic.
+Variables: Accepts VPC ID and allowed SSH IP range to ensure security and accessibility.
+Outputs: Exposes the security group ID.
+
+
+modules/ec2:
+
+Purpose: Launches an EC2 instance within the VPC and applies security rules.
+Resources:
+aws_instance: Creates an EC2 instance with NGINX installed (through the userdata.sh script).
+Variables: Takes in details like AMI ID, instance type, key name, subnet ID, and security group for the EC2 instance.
+Outputs: Exposes the instance's public IP for external access.
+
+
+scripts/userdata.sh:
+
+Purpose: Provides instructions for the EC2 instance to automatically install and start NGINX, ensuring that the instance is ready to serve web content on launch.
+variables.tf and outputs.tf in the root directory:
+
+Variables: Define customizable parameters (e.g., SSH key, allowed SSH IP) that can be easily adjusted without modifying the main code.
+Outputs: Display essential values like the EC2 instance’s public IP, VPC ID, and security group ID for easy reference after deployment.
