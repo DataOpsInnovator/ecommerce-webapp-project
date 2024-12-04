@@ -72,8 +72,8 @@ header {
 }
 
 .main-nav a {
-    color: white;
-    text-decoration: none;
+    color: yellow;
+    text-decoration: bold;
     padding: 10px 25px;
 }
 
