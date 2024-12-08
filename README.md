@@ -1,4 +1,4 @@
-# ShopSmartlytoday.com - AWS Repository
+# ShopSmartlytoday-eCommerce Repository
 
 Welcome to the **ShopSmartlytoday.com** repository! This repository contains the source code and assets for the ShopSmartlytoday.com website, which is developed and hosted on an AWS EC2 web server.
 
@@ -7,6 +7,7 @@ Welcome to the **ShopSmartlytoday.com** repository! This repository contains the
 - **index.html**: The main HTML file for the website.
 - **styles.css**: The stylesheet for styling the website.
 - **logo.png**: The logo image for the website.
+- **images**: The image folder the website.
 
 ## Project Overview
 
@@ -22,12 +23,12 @@ The website is hosted on an Amazon Web Services (AWS) EC2 instance, providing re
 To run this project locally, follow these steps:
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/Amazon-Web-Service-AWS.git
+   
+   git clone https://github.com/DataOpsInnovator/ShopSmartlytoday-eCommerce.git
 
-2. Navigate to the project directory:
- ```bash
-   cd Amazon-Web-Service-AWS
+3. Navigate to the project directory:
+
+   cd ShopSmartlytoday-eCommerce
 
 3.Open the index.html file in your preferred web browser to view the website.
 
